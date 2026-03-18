@@ -48,9 +48,9 @@ trackButton.addEventListener('click', () => {
     
     // Рендерим ленту статусов
     renderStatuses(response.statuses);
-    });
+});
 
-    // Рендерим список статусов в ленте
+// Рендерим список статусов в ленте
 function renderStatuses(statuses) {
     // Очищаем список
     trackStatusList.innerHTML = '';
@@ -83,4 +83,4 @@ function renderStatuses(statuses) {
         item.append(icon, text);
         trackStatusList.appendChild(item);
     });
-}
+};

@@ -16,7 +16,7 @@ const totalValue = document.getElementById('totalValue');
 const orderForm = document.getElementById('orderForm');
 const nameInput = document.getElementById('customerName');
 const phoneInput = document.getElementById('customerPhone');
-const commentInpuymapst = document.getElementById('comment');
+const commentInput = document.getElementById('comment');
 const orderSuccessBlock = document.getElementById('orderSuccess');
 const orderIdValue = document.getElementById('orderId');
 
@@ -44,20 +44,19 @@ ymaps.ready(() => {
         zoom: 5,
         controls: ['zoomControl']
     });
+    
+    // Подключаем подсказки адресов к полям от яндекса
+    new ymaps.SuggestView('from');
+    new ymaps.SuggestView('to');
 
-});
-
-// Подключаем подсказки адресов к полям от яндекса
-new ymaps.SuggestView('from');
-new ymaps.SuggestView('to');
-
-// Логика выбора размера посылки и скорости доставки
-[sizes, speeds].forEach(group => {
-    group.forEach(element => {
-        element.addEventListener('click', () => {
-            group.forEach((c) => c.classList.toggle('is-active', c.dataset.value === element.dataset.value));
-            renderInfo();
-        })
+    // Логика выбора размера посылки и скорости доставки
+    [sizes, speeds].forEach(group => {
+        group.forEach(element => {
+            element.addEventListener('click', () => {
+                group.forEach((c) => c.classList.toggle('is-active', c.dataset.value === element.dataset.value));
+                renderInfo();
+            })
+        });
     });
 });
 
@@ -65,6 +64,7 @@ new ymaps.SuggestView('to');
 [fromInput, toInput].forEach((input) => {
     input.addEventListener('change', () => {
         calcButton.disabled = !(fromInput.value && toInput.value);
+        renderInfo();
     });
 });
 
@@ -82,60 +82,60 @@ calcButton.addEventListener('click', () => {
     // Добавляем новый маршрут на карту.
     map.geoObjects.add(mapRoute);
 
+    // Успешно получили маршрут — берём дистанцию и время.
+    mapRoute.model.events.add('requestsuccess', () => {
+        try {
+            // Берем активный маршрут (основной).
+            const activeRoute = mapRoute.getActiveRoute();
+            if (!activeRoute) {
+                return failedCalculation();
+            }
+
+            // Извлекаем расстояние и длительность.
+            const km = activeRoute.properties.get('distance').value / 1000;
+            // Считаем цену: тариф * км, округляем вверх.
+            const size = document.querySelector('.main-size-card.is-active').dataset.value;
+            // Применяем минимальный порог.
+            let total = Math.max(MIN_BY_SIZE[size], Math.ceil(km * RATES[size]));
+            // Просчитываем длительность доставки
+            let duration = Math.min(30, 1 + Math.ceil(km / 80));
+
+            // Увеличиваем на 15% и сокращаем время на 30%
+            const speed = document.querySelector('.main-speed-card.is-active').dataset.value;
+            if (speed === 'fast') {
+                total = Math.ceil(total * 1.15);
+                duration = Math.ceil(duration - (duration * 0.30));
+            }
+
+            calculation = {
+                from: fromInput.value,
+                to: toInput.value,
+                size: size,
+                distance: km.toFixed(1),
+                duration: duration,
+                rate: RATES[size],
+                total: total,
+                speed: speed
+            };
+
+            // Выводим результат на экран.
+            renderInfo({
+                distanceText: `${calculation.distance} км`,
+                durationText: `${calculation.duration} дн.`,
+                rateText: `${calculation.rate} ₽/км`,
+                totalText: calculation.total
+            });
+
+            submitButton.disabled = false;
+        } catch (err) {
+            failedCalculation();
+        }
+    });
+
+    // Ошибка запроса маршрута.
+    mapRoute.model.events.add('requestfail', failedCalculation);
 });
 
-// Успешно получили маршрут — берём дистанцию и время.
-mapRoute.model.events.add('requestsuccess', () => {
-    try {
-        // Берем активный маршрут (основной).
-        const activeRoute = mapRoute.getActiveRoute();
-        if (!activeRoute) {
-            return failedCalculation();
-        }
-
-        // Извлекаем расстояние и длительность.
-        const km = activeRoute.properties.get('distance').value / 1000;
-        // Считаем цену: тариф * км, округляем вверх.
-        const size = document.querySelector('.main-size-card.is-active').dataset.value;
-        // Применяем минимальный порог.
-        let total = Math.max(MIN_BY_SIZE[size], Math.ceil(km * RATES[size]));
-        // Просчитываем длительность доставки
-        let duration = Math.min(30, 1 + Math.ceil(km / 80));
-
-        // Увеличиваем на 15% и сокращаем время на 30%
-        const speed = document.querySelector('.main-speed-card.is-active').dataset.value;
-        if (speed === 'fast') {
-            total = Math.ceil(total * 1.15);
-            duration = Math.ceil(duration - (duration * 0.30));
-        }
-
-        calculation = {
-            from: fromInput.value,
-            to: toInput.value,
-            size: size,
-            distance: km.toFixed(1),
-            duration: duration,
-            rate: RATES[size],
-            total: total,
-            speed: speed
-        };
-
-        // Выводим результат на экран.
-        renderInfo({
-            distanceText: `${calculation.distance} км`,
-            durationText: `${calculation.duration} дн.`,
-            rateText: `${calculation.rate} ₽/км`,
-            totalText: calculation.total
-        });
-
-        submitButton.disabled = false;
-    } catch (err) {
-        failedCalculation();
-    }
-});
-
-// Ошибка запроса маршрута.
-mapRoute.model.events.add('requestfail', failedCalculation);
 
  // Dывод значений просчета в форму
  function renderInfo(info = null) {
@@ -153,11 +153,6 @@ function failedCalculation() {
     alert('Не удалось построить маршрут. Проверьте адреса и выбранные параметры.');
     submitButton.disabled = true;
 }
-
-// Внутрь ymaps.ready sizes.forEach после sizes.forEach добавляем
-renderInfo();
-// И тоже самое после calcButton.disabled ниже
-renderInfo();
 
 // Отправка заявки (демо без реального бэкенда).
 submitButton.addEventListener('click', async () => {
