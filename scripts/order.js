@@ -48,7 +48,6 @@ ymaps.ready(() => {
 });
 
 // Подключаем подсказки адресов к полям от яндекса
-// debugger;
 new ymaps.SuggestView('from');
 new ymaps.SuggestView('to');
 
